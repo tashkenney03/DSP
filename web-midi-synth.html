@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arduino MIDI Web Synth</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 800px;
+            width: 100%;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        
+        .status {
+            text-align: center;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+        
+        .status.waiting {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .button {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+        }
+        
+        .button:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .control-group {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+        }
+        
+        .control-group label {
+            display: block;
+            margin-bottom: 10px;
+            color: #333;
+            font-weight: bold;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            height: 8px;
+            border-radius: 5px;
+            background: #ddd;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+        }
+        
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+        }
+        
+        .value-display {
+            text-align: center;
+            font-size: 1.5em;
+            color: #667eea;
+            margin-top: 10px;
+        }
+        
+        .note-display {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .note-key {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            transition: all 0.1s;
+            border: 3px solid transparent;
+        }
+        
+        .note-key.active {
+            background: #667eea;
+            color: white;
+            transform: scale(1.05);
+            border-color: #764ba2;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .note-name {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .note-number {
+            font-size: 0.9em;
+            opacity: 0.7;
+        }
+        
+        .instructions {
+            background: #e7f3ff;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        
+        .instructions h3 {
+            color: #004085;
+            margin-bottom: 10px;
+        }
+        
+        .instructions ol {
+            margin-left: 20px;
+            color: #004085;
+        }
+        
+        .instructions li {
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎹 Arduino MIDI Synth</h1>
+        <p class="subtitle">Web Audio Synthesizer</p>
+        
+        <div id="status" class="status waiting">
+            Click "Enable Audio" to start
+        </div>
+        
+        <button id="startBtn" class="button">🔊 Enable Audio</button>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label for="volume">Master Volume</label>
+                <input type="range" id="volume" min="0" max="100" value="50">
+                <div class="value-display" id="volumeDisplay">50%</div>
+            </div>
+            
+            <div class="control-group">
+                <label for="waveform">Waveform</label>
+                <select id="waveform" style="width: 100%; padding: 10px; border-radius: 5px; border: 2px solid #ddd; font-size: 1em;">
+                    <option value="sine">Sine (Pure)</option>
+                    <option value="triangle">Triangle (Soft)</option>
+                    <option value="sawtooth">Sawtooth (Bright)</option>
+                    <option value="square">Square (Retro)</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="note-display" id="noteDisplay">
+            <div class="note-key"><div class="note-name">C</div><div class="note-number">60</div></div>
+            <div class="note-key"><div class="note-name">D</div><div class="note-number">62</div></div>
+            <div class="note-key"><div class="note-name">E</div><div class="note-number">64</div></div>
+            <div class="note-key"><div class="note-name">F</div><div class="note-number">65</div></div>
+            <div class="note-key"><div class="note-name">G</div><div class="note-number">67</div></div>
+            <div class="note-key"><div class="note-name">A</div><div class="note-number">69</div></div>
+            <div class="note-key"><div class="note-name">B</div><div class="note-number">71</div></div>
+            <div class="note-key"><div class="note-name">C</div><div class="note-number">72</div></div>
+        </div>
+        
+        <div class="instructions">
+            <h3>📋 How to Use:</h3>
+            <ol>
+                <li>Click "Enable Audio" above</li>
+                <li>Keep your Python script running in Terminal</li>
+                <li>Press pads on your Arduino controller</li>
+                <li>Adjust volume and waveform to taste!</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        let audioContext;
+        let masterGain;
+        let activeNotes = {};
+        let waveformType = 'sine';
+        
+        const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        
+        function midiToFreq(midiNote) {
+            return 440 * Math.pow(2, (midiNote - 69) / 12);
+        }
+        
+        function getNoteName(midiNote) {
+            const octave = Math.floor(midiNote / 12) - 1;
+            const noteName = noteNames[midiNote % 12];
+            return `${noteName}${octave}`;
+        }
+        
+        function updateStatus(message, type = 'waiting') {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+        }
+        
+        function highlightNote(midiNote, active) {
+            const noteKeys = document.querySelectorAll('.note-key');
+            noteKeys.forEach(key => {
+                const noteNum = parseInt(key.querySelector('.note-number').textContent);
+                if (noteNum === midiNote) {
+                    if (active) {
+                        key.classList.add('active');
+                    } else {
+                        key.classList.remove('active');
+                    }
+                }
+            });
+        }
+        
+        function playNote(midiNote, velocity) {
+            if (!audioContext) return;
+            
+            const freq = midiToFreq(midiNote);
+            const gain = (velocity / 127) * (masterGain.gain.value);
+            
+            // Create oscillator
+            const osc = audioContext.createOscillator();
+            osc.type = waveformType;
+            osc.frequency.value = freq;
+            
+            // Create envelope
+            const noteGain = audioContext.createGain();
+            noteGain.gain.setValueAtTime(0, audioContext.currentTime);
+            noteGain.gain.linearRampToValueAtTime(gain, audioContext.currentTime + 0.01);
+            
+            // Connect
+            osc.connect(noteGain);
+            noteGain.connect(masterGain);
+            
+            osc.start();
+            
+            // Store active note
+            activeNotes[midiNote] = { osc, noteGain };
+            
+            // Highlight visual
+            highlightNote(midiNote, true);
+            
+            updateStatus(`🎵 Playing: ${getNoteName(midiNote)} (${midiNote}) - Velocity: ${velocity}`, 'connected');
+        }
+        
+        function stopNote(midiNote) {
+            if (!audioContext || !activeNotes[midiNote]) return;
+            
+            const { osc, noteGain } = activeNotes[midiNote];
+            
+            // Fade out
+            noteGain.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.05);
+            osc.stop(audioContext.currentTime + 0.05);
+            
+            delete activeNotes[midiNote];
+            
+            // Remove highlight
+            highlightNote(midiNote, false);
+            
+            updateStatus('🎹 Ready - Waiting for notes...', 'connected');
+        }
+        
+        // Initialize audio
+        document.getElementById('startBtn').addEventListener('click', async () => {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                masterGain = audioContext.createGain();
+                masterGain.gain.value = 0.5;
+                masterGain.connect(audioContext.destination);
+                
+                updateStatus('🎹 Ready - Press your Arduino pads!', 'connected');
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('startBtn').textContent = '✅ Audio Enabled';
+            } catch (e) {
+                updateStatus('❌ Error: Could not initialize audio', 'error');
+            }
+        });
+        
+        // Volume control
+        document.getElementById('volume').addEventListener('input', (e) => {
+            const vol = e.target.value / 100;
+            if (masterGain) {
+                masterGain.gain.value = vol;
+            }
+            document.getElementById('volumeDisplay').textContent = `${e.target.value}%`;
+        });
+        
+        // Waveform control
+        document.getElementById('waveform').addEventListener('change', (e) => {
+            waveformType = e.target.value;
+        });
+        
+        // Listen for Web MIDI (if available)
+        if (navigator.requestMIDIAccess) {
+            navigator.requestMIDIAccess().then(access => {
+                const inputs = access.inputs.values();
+                for (let input of inputs) {
+                    input.onmidimessage = (msg) => {
+                        const [status, note, velocity] = msg.data;
+                        
+                        if (status === 0x90 && velocity > 0) {
+                            // Note On
+                            playNote(note, velocity);
+                        } else if (status === 0x80 || (status === 0x90 && velocity === 0)) {
+                            // Note Off
+                            stopNote(note);
+                        }
+                    };
+                }
+            }).catch(err => {
+                console.log('Web MIDI not available, use Python bridge');
+            });
+        }
+        
+        // Keyboard testing (for demo without Arduino)
+        const keyMap = {
+            'a': 60, 's': 62, 'd': 64, 'f': 65,
+            'g': 67, 'h': 69, 'j': 71, 'k': 72
+        };
+        
+        document.addEventListener('keydown', (e) => {
+            if (keyMap[e.key] && !activeNotes[keyMap[e.key]]) {
+                playNote(keyMap[e.key], 100);
+            }
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            if (keyMap[e.key]) {
+                stopNote(keyMap[e.key]);
+            }
+        });
+    </script>
+</body>
+</html>
